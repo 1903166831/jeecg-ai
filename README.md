@@ -1,4 +1,4 @@
-[English](./README.en-US) | 中文
+中文 | [English](./README.en-US.md)
 
 Jeecg AI应用平台+零代码平台
 ===============

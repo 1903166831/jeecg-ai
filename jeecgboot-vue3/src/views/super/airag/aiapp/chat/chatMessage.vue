@@ -55,6 +55,19 @@
       <div class="msgArea" v-else-if="!isCard && !isCardConfig" :class="showAvatar == 'no' ? 'hidden-avatar' : ''">
         <chatText :text="text" :inversion="inversion" :error="error" :errorMsg="errorMsg" :currentToolTag="currentToolTag" :loading="loading" :referenceKnowledge="referenceKnowledge" :isLast="isLast"></chatText>
       </div>
+      <div
+        v-if="inversion === 'ai' && structuredPreview && structuredPreview.cacheKey"
+        class="structured-action-bar"
+        :class="showAvatar == 'no' ? 'hidden-avatar action-hidden-avatar' : ''"
+      >
+        <div class="structured-action-tip">
+          <span class="structured-action-type">{{ structuredPreview.typeLabel || '结构化内容' }}</span>
+          <span class="structured-action-text">当前结果已缓存到中间渲染区</span>
+        </div>
+        <a-button type="primary" size="small" class="structured-view-btn" @click="handleViewStructured">
+          查看
+        </a-button>
+      </div>
       <div v-if="presetQuestion" v-for="item in presetQuestion" class="question" @click="presetQuestionClick(item.descr)">
         <span>{{item.descr}}</span>
       </div>
@@ -78,7 +91,7 @@
   import {encryptByBase64} from "@/utils/cipher";
 
   const { domainUrl, viewUrl } = useGlobSetting();
-  const props = defineProps(['dateTime', 'text', 'inversion', 'error', 'loading','errorMsg', 'currentToolTag', 'appData','presetQuestion','images','retrievalText', 'referenceKnowledge', 'eventType', 'showAvatar',"files", 'isLast']);
+  const props = defineProps(['dateTime', 'text', 'inversion', 'error', 'loading','errorMsg', 'currentToolTag', 'appData','presetQuestion','images','retrievalText', 'referenceKnowledge', 'eventType', 'showAvatar',"files", 'isLast', 'structuredPreview']);
 
   const uuid = ref<any>(buildUUID());
   const activeKey = ref<any>(uuid.value);
@@ -110,9 +123,10 @@
 
   const { userInfo } = useUserStore();
   const avatar = () => {
-    return getFileAccessHttpUrl(userInfo?.avatar) || defaultAvatar;
+    // return getFileAccessHttpUrl(userInfo?.avatar) || defaultAvatar;
+    return defaultAvatar;
   };
-  const emit = defineEmits(['send']);
+  const emit = defineEmits(['send', 'view-structured']);
   const getAiImg = () => {
     return getFileAccessHttpUrl(props.appData?.icon) || defaultImg;
   };
@@ -123,6 +137,10 @@
    */
   function presetQuestionClick(descr) {
     emit("send",descr)
+  }
+
+  function handleViewStructured() {
+    emit('view-structured', props.structuredPreview);
   }
 
   /**
@@ -234,12 +252,13 @@
 <style lang="less" scoped>
   .chat {
     display: flex;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1.25rem;
+    align-items: flex-start;
     &.self {
       flex-direction: row-reverse;
       .avatar {
         margin-right: 0;
-        margin-left: 10px;
+        margin-left: 12px;
       }
       .msgArea {
         flex-direction: row-reverse;
@@ -247,7 +266,7 @@
       }
       .thinkArea{
         margin: 0;
-        padding: 5px 0 5px 22px;
+        padding: 6px 0 6px 22px;
         position: relative;
       }
       .date {
@@ -259,51 +278,98 @@
     padding: 0 !important;
   }
   .hidden-avatar{
-    left: 44px;
+    left: 52px;
     position: relative;
-    top: -18px;
+    top: -12px;
   }
   .avatar {
     flex: none;
-    margin-right: 10px;
+    margin-right: 12px;
     img {
-      width: 34px;
-      height: 34px;
-      border-radius: 50%;
+      width: 38px;
+      height: 38px;
+      border-radius: 14px;
       overflow: hidden;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, 0.08);
+      object-fit: cover;
     }
     svg {
       font-size: 28px;
     }
   }
   .chat.chatgpt .avatar img{
-    border-radius: 4px;
+    border-radius: 14px;
   }
   .content {
-    width: 90%;
+    width: 100%;
+    min-width: 0;
     .date {
-      color: #b4bbc4;
-      font-size: 0.75rem;
-      margin-bottom: 10px;
+      color: #94a3b8;
+      font-size: 12px;
+      margin-bottom: 8px;
+      padding: 0 4px;
     }
     .msgArea {
       display: flex;
     }
   }
 
+  .structured-action-bar{
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    border: 1px dashed #cfe0ff;
+    background: rgba(239, 246, 255, 0.92);
+  }
+  .action-hidden-avatar{
+    width: calc(100% - 52px);
+  }
+  .structured-action-tip{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    color: #475569;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .structured-action-type{
+    flex: none;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: #dbeafe;
+    color: #155eef;
+    font-weight: 600;
+  }
+  .structured-action-text{
+    min-width: 0;
+  }
+  .structured-view-btn{
+    flex: none;
+    border-radius: 10px;
+    box-shadow: 0 8px 18px rgba(22, 119, 255, 0.16);
+  }
+
   .question{
     margin-top: 10px;
-    border-radius: 0.375rem;
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
+    border-radius: 14px;
+    padding: 10px 14px;
     background-color: #ffffff;
-    font-size: 0.875rem;
-    line-height: 1.25rem;
+    font-size: 14px;
+    line-height: 1.4;
     cursor: pointer;
-    border: 1px solid #f0f0f0;
-    box-shadow: 0 2px 4px #e6e6e6;
+    border: 1px solid #e6edf7;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+    transition: all 0.2s ease;
+    &:hover {
+      transform: translateY(-1px);
+      border-color: #bfd4ff;
+      box-shadow: 0 12px 24px rgba(22, 119, 255, 0.08);
+    }
   }
 
   .images{
@@ -320,12 +386,12 @@
         width: 100%;
         height: 100%;
         object-fit: cover;
-        border-radius: 4px;
+        border-radius: 10px;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
       }
     }
   }
 
-  /*begin文件列表的样式*/
   .file-list {
     margin-bottom: 10px;
     display: flex;
@@ -337,12 +403,14 @@
   .file-item {
     display: flex;
     align-items: center;
-    background: #f4f6f8;
-    border-radius: 8px;
+    background: #f4f7fb;
+    border: 1px solid #e6edf7;
+    border-radius: 12px;
     padding: 8px 12px;
     cursor: pointer;
     width: fit-content;
     max-width: 100%;
+    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.03);
 
     .file-icon {
       margin-right: 8px;
@@ -352,29 +420,27 @@
 
     .file-name {
       font-size: 14px;
-      color: #333;
+      color: #334155;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
       max-width: 200px;
     }
   }
-  /*end文件列表的样式*/
 
   .retrieval,
   .card {
-    background-color: #f4f6f8;
-    font-size: 0.875rem;
-    line-height: 1.25rem;
-    border-radius: 0.375rem;
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    font-size: 14px;
+    line-height: 1.45;
+    border-radius: 18px;
+    padding: 12px 14px;
+    border: 1px solid #e5edf7;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, 0.05);
   }
   .retrieval:after{
     animation: blink 1s steps(5, start) infinite;
-    color: #000;
+    color: #0f172a;
     content: '_';
     font-weight: 700;
     margin-left: 3px;
@@ -383,6 +449,9 @@
   .card{
     width: 100%;
     background-color: unset;
+    border: none;
+    box-shadow: none;
+    padding: 0;
   }
   .ai-card{
      width: 98%;
@@ -428,9 +497,20 @@
       -webkit-line-clamp: 3;
     }
   }
-  @media (max-width: 600px) {
+  @media (max-width: 768px) {
     .content{
       width: 100%;
+    }
+    .hidden-avatar {
+      left: 0;
+      top: 0;
+    }
+    .avatar {
+      img {
+        width: 34px;
+        height: 34px;
+        border-radius: 12px;
+      }
     }
   }
 </style>

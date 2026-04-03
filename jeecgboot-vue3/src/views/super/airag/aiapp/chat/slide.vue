@@ -71,13 +71,6 @@
         </li>
       </ul>
     </div>
-    <div class="left-footer" v-if="source!='chatJs'">
-      AI客服由
-      <a style="color: #4183c4;margin-left: 2px;margin-right: 2px" href="https://www.qiaoqiaoyun.com/aiCustomerService" target="_blank">
-        JEECG AI
-      </a>
-      提供
-    </div>
   </div>
 </template>
 
@@ -212,34 +205,41 @@
 
 <style scoped lang="less">
   .slide-wrap {
-    border-right: 1px solid #e5e7eb;
     height: 100%;
     display: flex;
     flex-direction: column;
+    background: linear-gradient(180deg, #f9fbff 0%, #f5f8fd 100%);
     .historyArea {
-      padding: 20px;
-      padding-top: 0;
+      padding: 14px 14px 20px;
       flex: 1;
       min-height: 0;
       overflow: auto;
-      margin-bottom: 20px;
+      margin-bottom: 8px;
       &::-webkit-scrollbar {
         width: 8px;
         height: 8px;
       }
+      &::-webkit-scrollbar-thumb {
+        background: #d9e2f2;
+        border-radius: 999px;
+      }
     }
     .historyArea ul li:hover {
       .del {
-        display: block;
+        display: flex;
       }
     }
     .createArea {
-      padding: 20px;
-      padding-bottom: 0;
+      padding: 0 16px 14px;
     }
     .ant-btn {
       width: 100%;
-      margin-bottom: 10px;
+      height: 42px;
+      border-radius: 14px;
+      border-style: dashed;
+      font-weight: 600;
+      background: #fff;
+      box-shadow: 0 8px 22px rgba(15, 23, 42, 0.04);
     }
   }
   ul {
@@ -247,33 +247,46 @@
   }
   .list {
     width: 100%;
-    padding-top: 0.75rem;
-    padding-bottom: 0.75rem;
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
-    border-radius: 0.375rem;
-    border-width: 1px;
+    padding: 13px 14px;
+    border-radius: 16px;
+    border: 1px solid transparent;
     cursor: pointer;
     margin-bottom: 10px;
-    color: #333;
+    color: #334155;
     display: flex;
     justify-content: flex-start;
     align-items: center;
+    background: rgba(255, 255, 255, 0.74);
+    transition: all 0.22s ease;
     &:hover,
     &.active {
-      border-color: @primary-color;
-      color: @primary-color;
+      border-color: rgba(22, 119, 255, 0.22);
+      color: #1677ff;
+      background: linear-gradient(180deg, #f7fbff 0%, #eef5ff 100%);
+      box-shadow: 0 10px 26px rgba(22, 119, 255, 0.08);
+      transform: translateY(-1px);
     }
     .edit,
     .save,
     .del {
       display: none;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 8px;
+      color: #64748b;
+      transition: all 0.2s ease;
+      &:hover {
+        color: #1677ff;
+        background: rgba(22, 119, 255, 0.08);
+      }
     }
     &.active {
       .edit,
       .save,
       .del {
-        display: block;
+        display: flex;
       }
       &.last {
         .del {
@@ -282,10 +295,11 @@
       }
     }
     .message {
-      margin-right: 8px;
+      margin-right: 10px;
+      font-size: 16px;
     }
     .edit {
-      margin-right: 8px;
+      margin-right: 4px;
     }
     .title {
       flex: 1;
@@ -293,10 +307,12 @@
       text-overflow: ellipsis;
       white-space: nowrap;
       font-size: 14px;
+      font-weight: 500;
       position: relative;
-      top: 2px;
+      top: 1px;
       &.ant-input {
-        margin-right: 20px;
+        margin-right: 12px;
+        border-radius: 10px;
       }
     }
     svg {
@@ -311,28 +327,37 @@
   }
   .header {
     display: flex;
-    padding: 20px 4px 0 4px;
-    margin-left: 16px;
+    align-items: center;
+    gap: 12px;
+    padding: 22px 18px 16px;
+    margin: 0;
     .header-image {
-      height: 35px;
-      width: 35px;
-      border-radius: 4px;
-      margin-right: 10px;
+      height: 42px;
+      width: 42px;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(22, 119, 255, 0.12);
+      object-fit: cover;
     }
     .header-name {
-      align-self: center;
-      color: #1d2939;
-      font-weight: 600;
+      color: #0f172a;
+      font-weight: 700;
       font-size: 16px;
+      line-height: 1.2;
     }
   }
   .left-footer{
     display:flex;
-    margin-right: 20px;
+    align-items: center;
+    gap: 2px;
+    margin: 0 16px 16px;
     font-size: 12px;
-    position: absolute;
-    bottom: 4px;
-    left: 50px;
-    width: 100%;
+    color: #94a3b8;
+    flex-wrap: wrap;
+  }
+
+  @media (max-width: 768px) {
+    .slide-wrap {
+      box-shadow: 0 16px 44px rgba(15, 23, 42, 0.12);
+    }
   }
 </style>

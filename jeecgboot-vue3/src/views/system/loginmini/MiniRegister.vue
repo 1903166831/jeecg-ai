@@ -90,8 +90,8 @@
   import { getCaptcha, register } from '/@/api/sys/user';
   import { SmsEnum } from '/@/views/sys/login/useLogin';
   import { useMessage } from '/@/hooks/web/useMessage';
-  import logoImg from '/@/assets/loginmini/icon/jeecg_logo.png';
-  import jeecgAdTextImg from '/@/assets/loginmini/icon/jeecg_ad_text.png';
+  import logoImg from '/@/assets/loginmini/icon/star_logo.png';
+  import jeecgAdTextImg from '/@/assets/loginmini/icon/star_ad_text.png';
   import eyeKImg from '/@/assets/loginmini/icon/icon-eye-k.png';
   import eyeGImg from '/@/assets/loginmini/icon/icon-eye-g.png';
   import { useI18n } from "/@/hooks/web/useI18n";

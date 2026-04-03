@@ -15,13 +15,6 @@
           </a-button>
         </div>
         <div class="header-actions">
-          <div v-if="showAdvertising" class="header-advertisint">
-            AI客服由
-            <a style="color: #4183c4;margin-left: 2px;margin-right: 2px" href="https://jeecg.com/aigcIndex" target="_blank">
-              JEECG AI
-            </a>
-            提供
-          </div>
         </div>
       </div>
       <div class="main">
@@ -47,7 +40,9 @@
                 :eventType="item.eventType"
                 :showAvatar="item.showAvatar"
                 :isLast="index === chatData.length -1"
+                :structuredPreview="item.structuredPreview"
                 @send="handleOutQuestion"
+                @view-structured="handleViewStructured"
               ></chatMessage>
             </div>
           </template>
@@ -321,7 +316,7 @@
   });
 
   const props = defineProps(['uuid', 'prologue', 'formState', 'url', 'type','historyData','chatTitle','presetQuestion','quickCommandData','showAdvertising','hasExtraFlowInputs','conversationSettings','sessionType']);
-  const emit = defineEmits(['save','reload-message-title','edit-settings']);
+  const emit = defineEmits(['save','reload-message-title','edit-settings','panel-update']);
   const { scrollRef, scrollToBottom } = useScroll();
   const prompt = ref<string>('');
   const loading = ref<boolean>(false);
@@ -376,6 +371,156 @@
   const showDraw = ref<boolean>(false);
   //绘画模型的id
   const drawModelId = ref<string>('');
+  // 中间渲染区状态（前端概念 Demo：基于流式 Markdown 结构拆分）
+  const panelTransferState = ref({
+    switched: false,
+    type: '',
+    summary: '',
+    title: '',
+    excerpt: '',
+  });
+
+  function resetPanelTransfer() {
+    panelTransferState.value = {
+      switched: false,
+      type: '',
+      summary: '',
+      title: '',
+      excerpt: '',
+    };
+    emit('panel-update', {
+      content: '',
+      summary: '',
+      title: '',
+      type: '',
+      loading: false,
+    });
+  }
+
+  function detectStructuredPayload(content: string) {
+    const text = content || '';
+    const normalized = text.trim();
+    if (!normalized) return null;
+
+    const matchers = [
+      { type: 'card', regex: /::card::|::cardConfig::/i, title: '卡片数据结果' },
+      { type: 'code', regex: /```[\s\S]*?```/, title: '代码结果' },
+      { type: 'table', regex: /(^|\n)\|[^\n]+\|\s*(\n)\|[-:|\s]+\|/m, title: '表格结果' },
+      { type: 'image', regex: /!\[[^\]]*\]\(([^)]+)\)/, title: '图片结果' },
+      { type: 'markdown', regex: /(^|\n)#{1,6}\s+.+/m, title: '文档结果' },
+      { type: 'file', regex: /(\[[^\]]+\]\(([^)]+\.(pdf|docx?|xlsx?|pptx?|md))\))/i, title: '文件结果' },
+      { type: 'chart', regex: /<jeecg-chart|jeecg-chart/gi, title: '图表结果' },
+    ];
+
+    for (const item of matchers) {
+      const matched = item.regex.exec(text);
+      if (matched) {
+        const splitIndex = Math.max(0, matched.index);
+        const summarySource = text.slice(0, splitIndex).trim();
+        const summary = summarySource || text.slice(0, Math.min(120, text.length)).trim();
+        return {
+          type: item.type,
+          title: item.title,
+          summary,
+          splitIndex,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function buildPanelNotice(summary: string, type: string) {
+    const typeMap = {
+      table: '表格',
+      chart: '图表',
+      code: '代码',
+      image: '图片',
+      file: '文件',
+      markdown: 'Markdown 文档',
+      card: '卡片结果',
+    };
+    const summaryText = (summary || '已识别到结构化内容。').trim();
+    return `${summaryText}\n\n> 已检测到${typeMap[type] || '结构化'}内容，详细结果正在中间区域渲染。`;
+  }
+
+  const structuredCacheMap = ref<Record<string, any>>({});
+
+  function getStructuredTypeLabel(type: string) {
+    const typeMap = {
+      table: '表格',
+      chart: '图表',
+      code: '代码',
+      image: '图片',
+      file: '文件',
+      markdown: '文档',
+      card: '卡片',
+    };
+    return typeMap[type] || '结构化内容';
+  }
+
+  function buildStructuredCacheKey(item: any, fallbackIndex = 0) {
+    const seed = [
+      item?.conversationId || uuid.value || 'chat',
+      item?.topicId || topicId.value || 'topic',
+      item?.datetime || item?.dateTime || '',
+      item?.role || item?.inversion || 'ai',
+      fallbackIndex,
+    ].join('_');
+    return `structured_${seed.replace(/[^a-zA-Z0-9_:-]/g, '_')}`;
+  }
+
+  function buildStructuredPreview(payload: any, fallbackIndex = 0) {
+    if (!payload || (!payload.content && !payload.text)) return null;
+    const rawContent = payload.content ?? payload.text ?? '';
+    const structuredInfo = detectStructuredPayload(rawContent);
+    if (!structuredInfo) return null;
+    const cacheKey = payload.cacheKey || buildStructuredCacheKey(payload, fallbackIndex);
+    const preview = {
+      cacheKey,
+      type: structuredInfo.type,
+      typeLabel: getStructuredTypeLabel(structuredInfo.type),
+      title: structuredInfo.title,
+      summary: structuredInfo.summary || rawContent.slice(0, 120).trim(),
+      content: rawContent,
+      sourceDateTime: payload.datetime || payload.dateTime || '',
+    };
+    structuredCacheMap.value[cacheKey] = preview;
+    return preview;
+  }
+
+  function applyStructuredPreview(item: any, index = 0, options: any = {}) {
+    if (!item || (item.inversion || item.role) !== 'ai') return item;
+    const preview = buildStructuredPreview(item, index);
+    if (!preview) return item;
+    const nextItem = { ...item, structuredPreview: preview };
+    if (options.replaceContent !== false) {
+      nextItem.content = buildPanelNotice(preview.summary, preview.type);
+    }
+    return nextItem;
+  }
+
+  function syncStructuredCacheFromList(list: any[]) {
+    structuredCacheMap.value = {};
+    return (list || []).map((item, index) => applyStructuredPreview({ ...item }, index, { replaceContent: true }));
+  }
+
+  function renderStructuredPreview(preview: any, extra: any = {}) {
+    if (!preview || !preview.cacheKey) return;
+    const cached = structuredCacheMap.value[preview.cacheKey] || preview;
+    emit('panel-update', {
+      content: cached.content,
+      summary: cached.summary,
+      title: cached.title,
+      type: cached.type,
+      loading: !!extra.loading,
+    });
+  }
+
+  function handleViewStructured(preview: any) {
+    renderStructuredPreview(preview, { loading: false });
+  }
+
   //其他文件列表
   const fileUrlList = ref<any>([]);
   //文件列表（用于显示和管理）
@@ -428,6 +573,7 @@
     
     if (loading.value) return;
     loading.value = true;
+    resetPanelTransfer();
 
     addChat(uuid.value, {
       dateTime: new Date().toLocaleString(),
@@ -568,6 +714,9 @@
     console.log('ai 聊天：：：---停止响应');
     if (loading.value) {
       loading.value = false;
+    }
+    if (panelTransferState.value.switched) {
+      emit('panel-update', { loading: false });
     }
     updateChatSome(uuid, chatData.value.length - 1, { loading: false });
   };
@@ -717,13 +866,17 @@
     if (item.event == 'MESSAGE' || item.event == 'THINKING' || item.event == 'THINKING_END') {
       let message = item.data?.message ?? "";
       let messageText = "";
+      let fullText = text;
       //update-begin---author:wangshuai---date:2025-04-24---for:应该先判断是否包含card---
       if(message && message.indexOf("::card::") !== -1){
         messageText = message;
+        fullText = message;
       } else if(message && message.indexOf("::cardConfig::") !== -1) {
         messageText = message;
+        fullText = message;
       } else {
         text = text + message;
+        fullText = text;
         messageText = text;
         returnText = text;
       }
@@ -754,6 +907,52 @@
         isThinking.value = false;
         return { returnText, conversationId };
       }
+
+      const structuredInfo = detectStructuredPayload(fullText);
+
+      let structuredPreview = null;
+      if (structuredInfo) {
+        const safeSummary = structuredInfo.summary || panelTransferState.value.summary || '';
+        panelTransferState.value = {
+          switched: true,
+          type: structuredInfo.type,
+          summary: safeSummary,
+          title: structuredInfo.title,
+          excerpt: buildPanelNotice(safeSummary, structuredInfo.type),
+        };
+        structuredPreview = buildStructuredPreview({
+          content: fullText,
+          datetime: new Date().toLocaleString(),
+          role: 'ai',
+          conversationId,
+          topicId: topicId.value,
+        }, chatData.value.length - 1);
+        renderStructuredPreview(structuredPreview || {
+          content: fullText,
+          summary: safeSummary,
+          title: structuredInfo.title,
+          type: structuredInfo.type,
+          cacheKey: '',
+        }, { loading: item.event == 'THINKING_END' ? false : true });
+        messageText = panelTransferState.value.excerpt;
+      } else if (panelTransferState.value.switched) {
+        structuredPreview = buildStructuredPreview({
+          content: fullText,
+          datetime: new Date().toLocaleString(),
+          role: 'ai',
+          conversationId,
+          topicId: topicId.value,
+        }, chatData.value.length - 1) || structuredCacheMap.value[Object.keys(structuredCacheMap.value).slice(-1)[0]];
+        renderStructuredPreview(structuredPreview || {
+          content: fullText,
+          summary: panelTransferState.value.summary,
+          title: panelTransferState.value.title,
+          type: panelTransferState.value.type,
+          cacheKey: '',
+        }, { loading: item.event == 'THINKING_END' ? false : true });
+        messageText = panelTransferState.value.excerpt || buildPanelNotice(panelTransferState.value.summary, panelTransferState.value.type);
+      }
+
       //更新聊天信息
       updateChat(uuid.value, chatData.value.length - 1, {
         dateTime: new Date().toLocaleString(),
@@ -765,6 +964,7 @@
         requestOptions: { prompt: message, options: { ...options } },
         referenceKnowledge: knowList.value,
         eventType: item.event.toLowerCase(),
+        structuredPreview,
       });
     }
     if(item.event == 'INIT_REQUEST_ID'){
@@ -1126,6 +1326,7 @@
       if(result && message){
         loading.value = true;
         isReConnect.value = true;
+        resetPanelTransfer();
         //发送用户消息
         addChat(uuid.value, {
           dateTime: new Date().toLocaleString(),
@@ -1329,8 +1530,9 @@
     (val) => {
       try {
         //update-begin---author:wangshuai---date:2025-03-06---for:【QQYUN-11384】浏览器打开应用开场白丢了---
+        resetPanelTransfer();
         if (val && val.length > 0) {
-          chatData.value = cloneDeep(val);
+          chatData.value = syncStructuredCacheFromList(cloneDeep(val));
           if(chatData.value[0]){
             topicId.value = chatData.value[0].topicId
           }
@@ -1368,31 +1570,49 @@
   .chatWrap {
     width: 100%;
     height: 100%;
-    padding: 20px;
+    padding: 18px;
+    box-sizing: border-box;
+    overflow: hidden;
     .content {
       height: 100%;
       width: 100%;
-      background: #fff;
+      min-width: 0;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, #f8fbff 100%);
       display: flex;
       flex-direction: column;
+      border-radius: 24px;
+      overflow: hidden;
     }
   }
   .main {
     flex: 1;
     min-height: 0;
+    padding: 0 18px 8px;
     .scrollArea {
       overflow-y: auto;
+      overflow-x: hidden;
       height: 100%;
+      padding-right: 2px;
+      min-width: 0;
+      &::-webkit-scrollbar {
+        width: 8px;
+      }
+      &::-webkit-scrollbar-thumb {
+        background: #d8e1ee;
+        border-radius: 999px;
+      }
     }
     .chatContentArea {
-      padding: 10px;
+      padding: 10px 0 18px;
+      min-height: 100%;
+      min-width: 0;
     }
   }
   .emptyArea {
     display: flex;
     justify-content: center;
     align-items: center;
-    color: #d4d4d4;
+    color: #c0cad8;
   }
   .stopArea {
     display: flex;
@@ -1402,21 +1622,23 @@
   .footer {
     display: flex;
     flex-direction: column;
-    padding: 6px 16px;
+    padding: 8px 18px 18px;
+    gap: 10px;
     .topArea {
-      padding-left: 6%;
-      margin-bottom: 6px;
+      padding-left: 58px;
+      margin-bottom: 0;
     }
     .bottomArea {
       display: flex;
-      align-items: center;
+      align-items: flex-end;
+      gap: 10px;
 
       .ant-input {
         margin: 0 8px;
       }
       .ant-input,
       .ant-btn {
-        height: 36px;
+        height: 38px;
       }
       textarea.ant-input {
         padding-top: 6px;
@@ -1425,36 +1647,50 @@
       .contextBtn,
       .delBtn {
         padding: 0;
-        width: 40px;
-        border-radius: 50%;
+        width: 42px;
+        min-width: 42px;
+        height: 42px;
+        border-radius: 14px;
         display: flex;
         align-items: center;
         justify-content: center;
+        border: 1px solid #dbe4f0;
+        background: rgba(255, 255, 255, 0.85);
+        color: #64748b;
+        box-shadow: 0 8px 18px rgba(15, 23, 42, 0.04);
+        transition: all 0.2s ease;
+        &:hover {
+          color: #1677ff;
+          border-color: #bfd4ff;
+          background: #fff;
+        }
       }
       .delBtn {
-        margin-right: 8px;
+        margin-right: 0;
       }
       .contextBtn {
-        color: #a8071a;
         &.enabled {
-          color: @primary-color;
+          color: #1677ff;
+          border-color: rgba(22, 119, 255, 0.28);
+          background: rgba(22, 119, 255, 0.06);
         }
         font-size: 18px;
       }
       .sendBtn {
         font-size: 14px;
-        width: 100%;
+        width: auto;
         display: flex;
-        padding: 4px 6px;
+        padding: 4px 8px;
         align-items: center;
+        border-radius: 12px;
         &.enabled {
           color: #0a66ff !important;
         }
       }
       .webSearchBtn {
-        border-radius: 8px;
-        padding: 4px 8px;
-        height: 30px;
+        border-radius: 12px;
+        padding: 4px 10px;
+        height: 32px;
         background-color: transparent;
         border: 1px solid transparent;
         color: #3d4353;
@@ -1479,7 +1715,7 @@
         }
       }
       .stopBtn {
-        width: 32px;
+        width: 34px;
         display: flex;
         justify-content: center;
         align-items: center;
@@ -1488,138 +1724,145 @@
     }
   }
   :deep(.chatgpt .markdown-body) {
-    background-color: #f4f6f8;
+    background-color: transparent;
   }
   :deep(.ant-message) {
     top: 50% !important;
   }
   .header-title{
-    color: #101828;
-    font-size: 16px;
-    font-weight: 400;
-    padding-bottom: 8px;
-    margin-left: 20px;
+    color: #0f172a;
+    font-size: 18px;
+    font-weight: 600;
+    padding: 18px 22px 12px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    height: 30px;
-    
+    min-height: 64px;
+    border-bottom: 1px solid rgba(226, 232, 240, 0.85);
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(10px);
+
     .title-content{
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
       overflow: hidden;
-      
+
       > span{
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
     }
-    
+
     .header-actions{
       display: flex;
       align-items: center;
       gap: 8px;
       flex-shrink: 0;
     }
-    
+
     .edit-btn{
-      padding: 2px 4px;
-      color: #999;
+      padding: 2px 6px;
+      color: #94a3b8;
       flex-shrink: 0;
-      height: 24px;
-      
+      height: 28px;
+      border-radius: 10px;
+
       &:hover{
         color: @primary-color;
+        background: rgba(22, 119, 255, 0.08);
       }
-      
+
       :deep(.anticon){
         font-size: 16px;
       }
     }
-    
+
     .header-advertisint{
       display:flex;
-      margin-right: 20px;
+      margin-right: 0;
       font-size: 12px;
+      color: #94a3b8;
     }
   }
   .chat-textarea{
     display: flex;
     align-items: center;
     width: 100%;
-    border-radius: 15px;
-    border-style: solid;
-    border-width: 1px;
+    border-radius: 20px;
+    border: 1px solid #dbe4f0;
     flex-direction: column;
-    transition: width 0.3s;
-    border-color: #d2d7e5;
+    transition: all 0.22s ease;
+    background: rgba(255, 255, 255, 0.92);
+    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.06);
     .textarea-top{
-      border-bottom: 1px solid #f0f0f5;
-      padding: 12px 28px;
+      border-bottom: 1px solid #edf2f8;
+      padding: 14px 18px 12px;
       width: 100%;
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
       .top-image{
         display: flex;
+        position: relative;
         img{
-          border-radius: 8px;
+          border-radius: 12px;
           cursor: pointer;
           height: 60px;
           position: relative;
           width: 60px;
+          object-fit: cover;
         }
       }
-      /*begin 文件的样式*/
       .file-card {
         display: flex;
         align-items: center;
-        background: #f4f6f8;
-        border-radius: 8px;
+        background: #f4f7fb;
+        border: 1px solid #e5edf7;
+        border-radius: 12px;
         padding: 8px 12px;
-        width: 200px;
+        width: 220px;
         position: relative;
-        
+
         .file-card-icon {
-          width: 32px;
-          height: 32px;
+          width: 34px;
+          height: 34px;
           display: flex;
           align-items: center;
           justify-content: center;
-          margin-right: 8px;
+          margin-right: 10px;
           .file-thumb {
-            width: 32px;
-            height: 32px;
-            border-radius: 4px;
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
             object-fit: cover;
           }
         }
-        
+
         .file-card-info {
           flex: 1;
           overflow: hidden;
           .file-name {
             font-size: 14px;
-            color: #333;
+            color: #334155;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
           }
           .file-size {
             font-size: 12px;
-            color: #999;
+            color: #94a3b8;
           }
         }
-        
+
         .file-card-close {
           position: absolute;
           top: -6px;
           right: -6px;
-          width: 16px;
-          height: 16px;
-          background: #ccc;
+          width: 18px;
+          height: 18px;
+          background: #cbd5e1;
           border-radius: 50%;
           display: flex;
           align-items: center;
@@ -1629,27 +1872,25 @@
           font-size: 10px;
           opacity: 0;
           transition: opacity 0.2s;
-          
+
           &:hover {
             background: #ff4d4f;
           }
         }
-        
+
         &:hover .file-card-close {
           opacity: 1;
         }
-        /*end 文件的样式*/
       }
     }
     .textarea-bottom{
       display: flex;
       flex-direction: column;
       flex: 1 1;
-      min-height: 48px;
+      min-height: 56px;
       position: relative;
-      padding: 2px 10px;
+      padding: 8px 12px 10px;
       width: 100%;
-      /*begin 底部样式*/
       .textarea-action-bar {
         display: flex;
         justify-content: space-between;
@@ -1657,11 +1898,7 @@
         width: 100%;
         margin-top: 8px;
 
-        .left-actions {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
+        .left-actions,
         .right-actions {
           display: flex;
           align-items: center;
@@ -1670,17 +1907,29 @@
         .sendBtn {
           width: auto;
           padding: 4px 6px;
-          height: 30px;
+          height: 32px;
         }
       }
-      /*end 底部样式*/
+      :deep(.ant-input),
+      :deep(textarea.ant-input) {
+        border: none !important;
+        background: transparent !important;
+        box-shadow: none !important;
+        font-size: 14px;
+        color: #0f172a;
+      }
+      :deep(textarea.ant-input::placeholder) {
+        color: #94a3b8;
+      }
     }
   }
   .chat-textarea:hover{
-    border-color: #9dc1fb;
+    border-color: #bfd4ff;
+    box-shadow: 0 18px 38px rgba(15, 23, 42, 0.08);
   }
   .textarea-active{
     border-color: #98bdfa !important;
+    box-shadow: 0 18px 38px rgba(22, 119, 255, 0.12);
   }
   :deep(.ant-divider-vertical){
     margin: 0 2px;
@@ -1688,14 +1937,14 @@
   .upload-icon{
     cursor: pointer;
     position: absolute;
-    background-color: #1D1C23;
+    background-color: #0f172a;
     color: white;
     border-radius: 50%;
     padding: 4px;
     display: none;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 4px #e6e6e6;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.16);
     margin-left: 44px;
     margin-top: -4px;
   }
@@ -1704,22 +1953,41 @@
       display: flex;
     }
   }
-  
-  @media (max-width: 600px) {
-    //手机下的样式 平板不需要调整
-    .footer{
+
+  @media (max-width: 768px) {
+    .chatWrap{
       padding: 0;
-      .bottomArea{
-        .delBtn{
-          margin-right: 0;
-        }
+      .content {
+        border-radius: 0;
+        background: #f5f7fb;
       }
     }
-    .chatWrap{
-      padding: 10px 10px 10px 0;
+    .header-title {
+      padding: 14px 16px 10px;
+      min-height: 56px;
+      font-size: 16px;
     }
-    .main .chatContentArea{
-      padding: 10px 0 0 10px;
+    .main {
+      padding: 0 8px 8px;
+      .chatContentArea {
+        padding: 8px 0 16px;
+      }
+    }
+    .footer{
+      padding: 8px 10px 12px;
+      .topArea{
+        padding-left: 0;
+      }
+      .bottomArea{
+        gap: 8px;
+        .contextBtn,
+        .delBtn {
+          width: 38px;
+          min-width: 38px;
+          height: 38px;
+          border-radius: 12px;
+        }
+      }
     }
   }
 </style>

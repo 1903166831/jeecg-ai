@@ -301,7 +301,7 @@
       const tagName = el.nodeName.toLowerCase();
       const tag = jeecgTagMap.get(tagName);
       if (!tag) {
-        console.warn(`未识别的 jeecg 标签:`, tagName, el);
+        console.warn(`未识别的 Tag 标签:`, tagName, el);
         return;
       }
       const renderEl = el.querySelector('render') as HTMLDivElement;
@@ -370,97 +370,101 @@
 </script>
 <style lang="less" scoped>
   .textWrap {
-    border-radius: 0.375rem;
-    padding-top: 0.5rem;
-    padding-bottom: 0.5rem;
-    padding-left: 0.75rem;
-    padding-right: 0.75rem;
-    font-size: 0.875rem;
-    line-height: 1.25rem;
+    border-radius: 18px;
+    padding: 12px 14px;
+    font-size: 14px;
+    line-height: 1.55;
+    border: 1px solid #e5edf7;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
+    max-width: 100%;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+    &:hover {
+      border-color: #d6e4ff;
+      box-shadow: 0 14px 28px rgba(15, 23, 42, 0.06);
+    }
+    &.self {
+      background: linear-gradient(135deg, #1677ff 0%, #3b82f6 100%);
+      border-color: transparent;
+      box-shadow: 0 12px 28px rgba(22, 119, 255, 0.22);
+      :deep(*) {
+        color: #fff !important;
+      }
+      :deep(a) {
+        color: #fff !important;
+        text-decoration: underline;
+      }
+      :deep(code),
+      :deep(pre),
+      :deep(.hljs) {
+        color: #0f172a !important;
+      }
+    }
+    &.chatgpt-image {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 0;
+    }
   }
 
   .error {
-    background: linear-gradient(135deg, #FF4444, #FF914D) !important;
-    border-radius: 0.375rem;
+    background: linear-gradient(135deg, #ff4444, #ff914d) !important;
+    border-radius: 12px;
     padding-top: 0.5rem;
     padding-bottom: 0.5rem;
     padding-left: 0.75rem;
     padding-right: 0.75rem;
-    font-size: 0.875rem;
-    line-height: 1.25rem;
+  }
+
+  .msg {
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
   .error-message {
-    color: #FF4444 !important
+    margin-top: 10px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: rgba(255, 77, 79, 0.08);
+    border: 1px solid rgba(255, 77, 79, 0.18);
+    color: #cf1322;
   }
 
-  .self {
-    // background-color: #d2f9d1;
-    background-color: @primary-color;
-    color: #fff;
-    overflow-wrap: break-word;
-    line-height: 1.625;
-    min-width: 20px;
+  :deep(.markdown-body) {
+    color: #0f172a;
+    font-size: 14px;
+    line-height: 1.7;
+    background: transparent;
   }
-  .chatgpt {
-    background-color: #f4f6f8;
+  :deep(.markdown-body p:last-child) {
+    margin-bottom: 0;
+  }
+  :deep(.markdown-body pre) {
+    border-radius: 14px;
+    border: 1px solid #e5edf7;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.4);
+  }
+  :deep(.markdown-body blockquote) {
+    border-left: 4px solid #bfdbfe;
+    background: #f8fbff;
+    border-radius: 0 12px 12px 0;
+    padding: 8px 12px;
+    color: #475569;
+  }
+  :deep(.markdown-body table) {
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  :deep(.markdown-body img) {
+    border-radius: 14px;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+  }
 
-    font-size: 0.875rem;
-    line-height: 1.25rem;
-  }
-  .chatgpt-image {
-    .markdown-body{
-      background-color: transparent !important;
+  @media (max-width: 768px) {
+    .textWrap {
+      border-radius: 16px;
+      padding: 11px 12px;
     }
   }
-  @media (max-width: 1024px) {
-    //手机和平板下的样式
-    .textWrap{
-      margin-left: -40px;
-      margin-top: 10px;
-    }
-  }
-
-  // 生成图片的样式
-  :deep(.chat-image-grid-item) {
-    display: inline-block;
-    width: 24%;
-    padding: 4px;
-    box-sizing: border-box;
-    vertical-align: top;
-    img {
-      width: 100%;
-      height: auto;
-      border-radius: 4px;
-      cursor: pointer;
-      object-fit: cover;
-      aspect-ratio: 1/1;
-    }
-  }
-  :deep(.chat-image-single) {
-    img {
-      max-width: 50%;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-  }
-
-  .markdown-body {
-    :deep(.jeecg-tag) {
-      display: block;
-      margin: 8px 0;
-
-      data {
-        display: none;
-      }
-
-      render {
-        display: block;
-        width: 100%;
-        height: auto;
-        min-width: 300px;
-      }
-    }
-  }
-
 </style>

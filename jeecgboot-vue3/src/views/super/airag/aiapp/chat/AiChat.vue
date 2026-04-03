@@ -16,6 +16,15 @@
           </span>
         </div>
       </div>
+      <div class="middleArea">
+        <StructuredRenderPanel
+          :content="renderPanelData.content"
+          :summary="renderPanelData.summary"
+          :title="renderPanelData.title"
+          :type="renderPanelData.type"
+          :loading="renderPanelData.loading"
+        />
+      </div>
       <div class="rightArea" :class="[expand ? 'expand' : 'shrink']">
         <chat
           url="/airag/chat/send"
@@ -34,6 +43,7 @@
           :hasExtraFlowInputs="hasExtraFlowInputs"
           :conversationSettings="getCurrentSettings"
           @edit-settings="handleEditSettings"
+          @panel-update="handlePanelUpdate"
           ref="chatRef"
         ></chat>
       </div>
@@ -54,6 +64,7 @@
   import slide from './slide.vue';
   import chat from './chat.vue';
   import ConversationSettingsModal from './components/ConversationSettingsModal.vue';
+  import StructuredRenderPanel from './components/StructuredRenderPanel.vue';
   import { Spin, message } from 'ant-design-vue';
   import { ref, watch, nextTick, onUnmounted, onMounted, computed } from 'vue';
   import { useUserStore } from '/@/store/modules/user';
@@ -83,9 +94,17 @@
   const presetQuestion = ref<string>('');
   //加载
   const loading = ref<any>(true);
+  const renderPanelData = ref<any>({ content: '', summary: '', title: '', type: '', loading: false });
 
   const handleToggle = () => {
     expand.value = !expand.value;
+  };
+
+  const handlePanelUpdate = (payload) => {
+    renderPanelData.value = {
+      ...renderPanelData.value,
+      ...(payload || {}),
+    };
   };
   //应用id
   const appId = ref<string>('');
@@ -455,16 +474,23 @@
 </script>
 
 <style scoped lang="less">
-  @width: 260px;
+  @width: 300px;
+  @sidebarGap: 18px;
   .chat-container {
     height: 100%;
     width: 100%;
     position: absolute;
-    background: white;
+    inset: 0;
+    background:
+      radial-gradient(circle at top left, rgba(10, 102, 255, 0.08), transparent 28%),
+      radial-gradient(circle at right bottom, rgba(59, 130, 246, 0.08), transparent 26%),
+      linear-gradient(180deg, #f7faff 0%, #f3f6fb 100%);
     display: flex;
     overflow: hidden;
     z-index: 800;
-    border: 1px solid #eeeeee;
+    padding: @sidebarGap;
+    gap: @sidebarGap;
+    box-sizing: border-box;
     :deep(.ant-spin) {
       position: absolute;
       top: 50%;
@@ -475,21 +501,36 @@
 
   .leftArea {
     width: @width;
-    transition: 0.3s left;
-    position: absolute;
-    left: 0;
+    flex: 0 0 @width;
+    transition:
+      transform 0.28s ease,
+      opacity 0.28s ease,
+      width 0.28s ease,
+      flex-basis 0.28s ease;
+    position: relative;
     height: 100%;
+    min-width: 0;
+    border-radius: 24px;
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    box-shadow: 0 16px 40px rgba(15, 23, 42, 0.06);
 
     .content {
       width: 100%;
       height: 100%;
       overflow: hidden;
+      border-radius: 24px;
     }
 
     &.shrink {
-      left: -@width;
+      width: 0;
+      flex-basis: 0;
+      transform: translateX(-18px);
+      opacity: 0;
 
       .toggle-btn {
+        left: 14px;
+
         .icon {
           transform: rotate(0deg);
         }
@@ -498,32 +539,37 @@
 
     .toggle-btn {
       transition:
-        color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-        right 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-        left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-        border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-        background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        color 0.28s ease,
+        left 0.28s ease,
+        border-color 0.28s ease,
+        background-color 0.28s ease,
+        box-shadow 0.28s ease;
       cursor: pointer;
-      width: 24px;
-      height: 24px;
+      width: 34px;
+      height: 34px;
       position: absolute;
-      top: 50%;
-      right: 0;
-      border-radius: 50%;
+      top: 24px;
+      left: calc(100% - 17px);
+      border-radius: 999px;
       display: flex;
       align-items: center;
       justify-content: center;
       font-size: 18px;
-      color: rgb(51, 54, 57);
-      border: 1px solid rgb(239, 239, 245);
-      background-color: #fff;
-      box-shadow: 0 2px 4px 0px #e7e9ef;
-      transform: translateX(50%) translateY(-50%);
-      z-index: 1;
+      color: #334155;
+      border: 1px solid #dbe4f0;
+      background-color: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+      z-index: 3;
+
+      &:hover {
+        color: #1677ff;
+        border-color: #bcd3ff;
+        background-color: #ffffff;
+      }
     }
 
     .icon {
-      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: transform 0.28s ease;
       transform: rotate(180deg);
       font-size: 18px;
       height: 18px;
@@ -536,15 +582,81 @@
     }
   }
 
-  .rightArea {
-    margin-left: @width;
-    transition: 0.3s margin-left;
-
-    &.shrink {
-      margin-left: 0;
-    }
-
+  .middleArea {
     flex: 1;
     min-width: 0;
+    height: 100%;
+  }
+
+  .rightArea {
+    flex: 0 0 clamp(420px, 30vw, 520px);
+    width: clamp(420px, 30vw, 520px);
+    min-width: 400px;
+    height: 100%;
+    border-radius: 28px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(226, 232, 240, 0.95);
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.08);
+    transition: width 0.28s ease, flex-basis 0.28s ease;
+  }
+
+  @media (max-width: 992px) {
+    @width: 264px;
+    .chat-container {
+      padding: 12px;
+      gap: 12px;
+    }
+    .leftArea {
+      flex-basis: @width;
+      width: @width;
+    }
+    .rightArea {
+      flex-basis: 380px;
+      width: 380px;
+      min-width: 340px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .chat-container {
+      padding: 0;
+      gap: 0;
+      background: #f5f7fb;
+    }
+
+    .leftArea {
+      position: absolute;
+      z-index: 4;
+      left: 12px;
+      top: 12px;
+      bottom: 12px;
+      width: min(78vw, 300px);
+      flex-basis: min(78vw, 300px);
+
+      &.shrink {
+        transform: translateX(calc(-100% - 16px));
+        opacity: 1;
+      }
+
+      .toggle-btn {
+        left: calc(100% + 8px);
+        top: 14px;
+      }
+    }
+
+    .middleArea {
+      display: none;
+    }
+
+    .rightArea {
+      flex: 1;
+      width: auto;
+      min-width: 0;
+      border-radius: 0;
+      border: none;
+      box-shadow: none;
+      background: #f5f7fb;
+    }
   }
 </style>

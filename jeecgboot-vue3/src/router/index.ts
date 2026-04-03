@@ -23,7 +23,7 @@ export function createRouter() {
       strict: true,
       scrollBehavior: () => ({left: 0, top: 0}),
     },
-    // 如果是 Electron 环境，则使用 hash 路由
+    // 如果是 Electron 环境，则使用 hash 路由   逻辑关闭 全部 hash
     $electron.isElectron(),
   )
 

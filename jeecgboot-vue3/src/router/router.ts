@@ -18,7 +18,8 @@ let webHistory: Nullable<RouterHistory> = null;
  * @param useHashHistory 是否使用 hash 路由，true使用，false不使用hash路由
  */
 export function createRouter(options: Partial<RouterOptions>, useHashHistory = false) {
-  const createFn = useHashHistory ? createWebHashHistory : createWebHistory;
+  // const createFn = useHashHistory ? createWebHashHistory : createWebHistory;
+  const createFn = createWebHashHistory;
   webHistory = createFn(import.meta.env.VITE_PUBLIC_PATH);
   // app router
   let router = createVueRouter({

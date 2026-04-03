@@ -289,16 +289,17 @@
        * 演示
        */
       function handleViewClick(id: string) {
-        let url = '/ai/app/chat/' + id;
+        const path = `/ai/app/chat/${id}`;
+        const base = import.meta.env.VITE_PUBLIC_PATH || '/';
+        const url = `${window.location.origin}${base}#${path}`;
 
-        // update-begin--author:sunjianlei---date:20250411---for：【QQYUN-9685】构建 electron 桌面应用
         if ($electron.isElectron()) {
-          url = $electron.resolveRoutePath(url);
-          window.open(url, '_blank', 'width=1200,height=800');
-          return
+          const electronUrl = $electron.resolveRoutePath(path);
+          window.open(electronUrl, '_blank', 'width=1200,height=800');
+          return;
         }
-        // update-end----author:sunjianlei---date:20250411---for：【QQYUN-9685】构建 electron 桌面应用
 
+        console.log('open url:', url);
         window.open(url, '_blank');
       }
 

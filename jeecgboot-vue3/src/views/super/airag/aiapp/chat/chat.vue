@@ -41,8 +41,11 @@
                 :showAvatar="item.showAvatar"
                 :isLast="index === chatData.length -1"
                 :structuredPreview="item.structuredPreview"
+                :fileMeta="item.fileMeta"
                 @send="handleOutQuestion"
                 @view-structured="handleViewStructured"
+                @download-file="handleDownloadFile"
+                @preview-file="handlePreviewFile"
               ></chatMessage>
             </div>
           </template>
@@ -310,6 +313,8 @@
   import { useAppInject } from "@/hooks/web/useAppInject";
   import { useGlobSetting } from "@/hooks/setting";
   import { Icon } from '/@/components/Icon';
+  import { buildFilePreviewNotice, downloadChatFileByFetch, normalizeChatFileMeta } from './utils/filePreview';
+  import { downloadFile } from './utils/fileDownload'
 
   message.config({
     prefixCls: 'ai-chat-message',
@@ -394,6 +399,8 @@
       title: '',
       type: '',
       loading: false,
+      fileMeta: null,
+      panelMode: 'data',
     });
   }
 
@@ -489,6 +496,25 @@
     return preview;
   }
 
+  function buildFileStructuredPreview(fileData: any, payload: any = {}, fallbackIndex = 0) {
+    const fileMeta = normalizeChatFileMeta(fileData);
+    if (!fileMeta || !fileMeta.fileUrl) return null;
+    const cacheKey = payload.cacheKey || `file_${buildStructuredCacheKey(payload, fallbackIndex)}`;
+    const preview = {
+      cacheKey,
+      type: 'file',
+      typeLabel: getStructuredTypeLabel('file'),
+      title: fileMeta.fileName || '文件结果',
+      summary: fileMeta.description || 'AI 已生成文件，可在中栏查看预览或下载',
+      content: buildFilePreviewNotice(fileMeta),
+      sourceDateTime: payload.datetime || payload.dateTime || '',
+      fileMeta,
+    };
+    structuredCacheMap.value[cacheKey] = preview;
+    return preview;
+  }
+
+
   function applyStructuredPreview(item: any, index = 0, options: any = {}) {
     if (!item || (item.inversion || item.role) !== 'ai') return item;
     const preview = buildStructuredPreview(item, index);
@@ -514,11 +540,26 @@
       title: cached.title,
       type: cached.type,
       loading: !!extra.loading,
+      fileMeta: cached.fileMeta || null,
+      panelMode: 'data',
     });
   }
 
   function handleViewStructured(preview: any) {
     renderStructuredPreview(preview, { loading: false });
+  }
+
+  async function handleDownloadFile(fileMeta: any) {
+    await downloadChatFileByFetch(fileMeta)
+  }
+
+  function handlePreviewFile(fileMeta: any) {
+    if (!fileMeta || !fileMeta.fileUrl) return;
+    emit('panel-update', {
+      panelMode: 'file',
+      fileMeta,
+      loading: false,
+    });
   }
 
   //其他文件列表
@@ -967,6 +1008,55 @@
         structuredPreview,
       });
     }
+    if (item.event == 'FILE') {
+      const fileMeta = normalizeChatFileMeta(item.data);
+      if (fileMeta) {
+        const lastIdx = chatData.value.length - 1;
+        const lastItem = lastIdx >= 0 ? (chatData.value[lastIdx] || {}) : {};
+        const existingPreview = lastItem?.structuredPreview || buildStructuredPreview({
+          content: lastItem?.content || text,
+          datetime: lastItem?.dateTime || new Date().toLocaleString(),
+          role: 'ai',
+          conversationId: item.conversationId || conversationId,
+          topicId: item.topicId || topicId.value,
+        }, lastIdx);
+
+        let nextPreview = null;
+        if (existingPreview) {
+          nextPreview = {
+            ...existingPreview,
+            summary: existingPreview.summary || fileMeta.description || 'AI 已生成文件，可在中栏预览或下载',
+            fileMeta,
+          };
+          structuredCacheMap.value[nextPreview.cacheKey] = nextPreview;
+        } else {
+          nextPreview = buildFileStructuredPreview(fileMeta, {
+            datetime: new Date().toLocaleString(),
+            role: 'ai',
+            conversationId: item.conversationId || conversationId,
+            topicId: item.topicId || topicId.value,
+          }, lastIdx);
+        }
+
+        updateChat(uuid.value, lastIdx, {
+          ...(lastItem || {}),
+          dateTime: lastItem?.dateTime || new Date().toLocaleString(),
+          content: lastItem?.content || text || buildFilePreviewNotice(fileMeta),
+          inversion: 'ai',
+          error: false,
+          loading: false,
+          conversationOptions: { conversationId: item.conversationId || conversationId, parentMessageId: item.topicId || topicId.value },
+          requestOptions: { prompt: options.message, options: { ...options } },
+          referenceKnowledge: knowList.value,
+          eventType: lastItem?.eventType || 'message',
+          structuredPreview: nextPreview,
+          fileMeta,
+        });
+
+      }
+      return { returnText: text, conversationId: item.conversationId || conversationId };
+    }
+
     if(item.event == 'INIT_REQUEST_ID'){
       if (item.requestId && props.url != "/airag/app/debug") {
         requestId.value = item.requestId;

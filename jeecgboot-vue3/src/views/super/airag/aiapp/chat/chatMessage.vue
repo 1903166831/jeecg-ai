@@ -1,5 +1,5 @@
 <template>
-  <div class="chat" :class="[inversion === 'user' ? 'self' : 'chatgpt']" v-if="getText || (props.presetQuestion && props.presetQuestion.length>0)">
+  <div class="chat" :class="[inversion === 'user' ? 'self' : 'chatgpt']" v-if="getText || hasActionContent || (props.presetQuestion && props.presetQuestion.length>0)">
     <div class="avatar" v-if="showAvatar !== 'no'">
       <img v-if="inversion === 'user'" :src="avatar()" />
       <img v-else :src="getAiImg()" />
@@ -56,17 +56,43 @@
         <chatText :text="text" :inversion="inversion" :error="error" :errorMsg="errorMsg" :currentToolTag="currentToolTag" :loading="loading" :referenceKnowledge="referenceKnowledge" :isLast="isLast"></chatText>
       </div>
       <div
-        v-if="inversion === 'ai' && structuredPreview && structuredPreview.cacheKey"
+        v-if="inversion === 'ai' && structuredPreview && structuredPreview.cacheKey && structuredPreview.type !== 'file'"
         class="structured-action-bar"
         :class="showAvatar == 'no' ? 'hidden-avatar action-hidden-avatar' : ''"
       >
         <div class="structured-action-tip">
           <span class="structured-action-type">{{ structuredPreview.typeLabel || '结构化内容' }}</span>
-          <span class="structured-action-text">当前结果已缓存到中间渲染区</span>
+          <span class="structured-action-text">点击查看可在中间区域渲染相关数据</span>
         </div>
         <a-button type="primary" size="small" class="structured-view-btn" @click="handleViewStructured">
           查看
         </a-button>
+      </div>
+      <div
+        v-if="inversion === 'ai' && currentFileMeta && currentFileMeta.fileUrl"
+        class="structured-action-bar file-action-card"
+        :class="showAvatar == 'no' ? 'hidden-avatar action-hidden-avatar' : ''"
+      >
+        <div class="file-action-main">
+          <div class="file-action-icon">
+            <Icon :icon="getFileIcon(currentFileMeta.fileName || currentFileMeta.fileUrl)" :color="getFileIconColor(currentFileMeta.fileName || currentFileMeta.fileUrl)" size="26" />
+          </div>
+          <div class="file-action-info">
+            <div class="file-action-name" :title="currentFileMeta.fileName">{{ currentFileMeta.fileName }}</div>
+            <div class="file-action-desc">{{ currentFileMeta.description || 'AI 已生成文件结果' }}</div>
+            <div class="file-action-meta">
+              <span>{{ String(currentFileMeta.fileType || '').toUpperCase() }}</span>
+            </div>
+          </div>
+        </div>
+        <div class="file-action-buttons">
+          <a-button type="primary" size="small" class="structured-view-btn" :disabled="currentFileMeta.canPreview === false" @click="handlePreviewFile">
+            文件预览
+          </a-button>
+          <a-button size="small" class="structured-download-btn" @click="handleDownloadFile">
+            下载
+          </a-button>
+        </div>
       </div>
       <div v-if="presetQuestion" v-for="item in presetQuestion" class="question" @click="presetQuestionClick(item.descr)">
         <span>{{item.descr}}</span>
@@ -91,7 +117,7 @@
   import {encryptByBase64} from "@/utils/cipher";
 
   const { domainUrl, viewUrl } = useGlobSetting();
-  const props = defineProps(['dateTime', 'text', 'inversion', 'error', 'loading','errorMsg', 'currentToolTag', 'appData','presetQuestion','images','retrievalText', 'referenceKnowledge', 'eventType', 'showAvatar',"files", 'isLast', 'structuredPreview']);
+  const props = defineProps(['dateTime', 'text', 'inversion', 'error', 'loading','errorMsg', 'currentToolTag', 'appData','presetQuestion','images','retrievalText', 'referenceKnowledge', 'eventType', 'showAvatar',"files", 'isLast', 'structuredPreview', 'fileMeta']);
 
   const uuid = ref<any>(buildUUID());
   const activeKey = ref<any>(uuid.value);
@@ -102,6 +128,13 @@
     }
     return text;
   })
+
+  const currentFileMeta = computed(() => {
+    return props.structuredPreview?.fileMeta || props.fileMeta || null;
+  });
+  const hasActionContent = computed(() => {
+    return !!(currentFileMeta.value?.fileUrl || props.structuredPreview?.cacheKey);
+  });
 
   const isCard = computed(() => {
     let text = props.text;
@@ -126,7 +159,7 @@
     // return getFileAccessHttpUrl(userInfo?.avatar) || defaultAvatar;
     return defaultAvatar;
   };
-  const emit = defineEmits(['send', 'view-structured']);
+  const emit = defineEmits(['send', 'view-structured', 'download-file', 'preview-file']);
   const getAiImg = () => {
     return getFileAccessHttpUrl(props.appData?.icon) || defaultImg;
   };
@@ -141,6 +174,14 @@
 
   function handleViewStructured() {
     emit('view-structured', props.structuredPreview);
+  }
+
+  function handlePreviewFile() {
+    emit('preview-file', currentFileMeta.value || null);
+  }
+
+  function handleDownloadFile() {
+    emit('download-file', currentFileMeta.value || null);
   }
 
   /**
@@ -352,6 +393,58 @@
     flex: none;
     border-radius: 10px;
     box-shadow: 0 8px 18px rgba(22, 119, 255, 0.16);
+  }
+  .file-action-card{
+    align-items: center;
+    border-style: solid;
+    background: linear-gradient(180deg, rgba(239,246,255,0.96) 0%, rgba(248,250,252,0.96) 100%);
+  }
+  .file-action-main{
+    display:flex;
+    align-items:flex-start;
+    gap:12px;
+    min-width:0;
+    flex:1;
+  }
+  .file-action-info{
+    min-width:0;
+    flex:1;
+  }
+  .file-action-name{
+    font-size:13px;
+    font-weight:600;
+    color:#0f172a;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .file-action-desc{
+    margin-top:2px;
+    font-size:12px;
+    color:#64748b;
+    line-height:1.5;
+  }
+  .file-action-meta{
+    margin-top:6px;
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    font-size:12px;
+    color:#475569;
+  }
+  .file-action-meta span{
+    padding:2px 8px;
+    border-radius:999px;
+    background:rgba(255,255,255,0.88);
+    border:1px solid #dbeafe;
+  }
+  .file-action-buttons{
+    display:flex;
+    gap:8px;
+    flex:none;
+  }
+  .structured-download-btn{
+    border-radius: 10px;
   }
 
   .question{

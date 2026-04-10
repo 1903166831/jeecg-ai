@@ -23,6 +23,9 @@
           :title="renderPanelData.title"
           :type="renderPanelData.type"
           :loading="renderPanelData.loading"
+          :fileMeta="renderPanelData.fileMeta"
+          :panelMode="renderPanelData.panelMode"
+          @preview-file="handleFilePreviewFromPanel"
         />
       </div>
       <div class="rightArea" :class="[expand ? 'expand' : 'shrink']">
@@ -94,7 +97,7 @@
   const presetQuestion = ref<string>('');
   //加载
   const loading = ref<any>(true);
-  const renderPanelData = ref<any>({ content: '', summary: '', title: '', type: '', loading: false });
+  const renderPanelData = ref<any>({ content: '', summary: '', title: '', type: '', loading: false, fileMeta: null, panelMode: 'data' });
 
   const handleToggle = () => {
     expand.value = !expand.value;
@@ -104,6 +107,14 @@
     renderPanelData.value = {
       ...renderPanelData.value,
       ...(payload || {}),
+    };
+  };
+
+  const handleFilePreviewFromPanel = (fileMeta) => {
+    renderPanelData.value = {
+      ...renderPanelData.value,
+      panelMode: 'file',
+      fileMeta: fileMeta || renderPanelData.value.fileMeta || null,
     };
   };
   //应用id
